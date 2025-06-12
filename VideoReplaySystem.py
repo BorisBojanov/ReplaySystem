@@ -123,5 +123,4 @@ if __name__ == "__main__":
         trigger_key=ord('s'),     # Press 's' to save
         quit_key=ord('q')         # Press 'q' to quit
     )
-    
     replay_system.run()
