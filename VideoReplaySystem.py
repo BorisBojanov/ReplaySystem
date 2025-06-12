@@ -10,7 +10,7 @@ from pathlib import Path
 
 class VideoReplaySystem:
     def __init__(self, camera_index=0, buffer_seconds=5, output_filename=None, 
-                 trigger_key=ord('s'), quit_key=ord('q'), codec='XVID', 
+                 trigger_key=ord('s'), quit_key=ord('q'), codec='mp4v', 
                  resolution=None, display_preview=True, save_dir="SavedReplays"):
         """
         Initialize the video replay system.
