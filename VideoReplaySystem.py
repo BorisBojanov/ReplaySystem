@@ -5,12 +5,13 @@ import numpy as np
 import cv2
 import collections
 from datetime import datetime
+from pathlib import Path
 
 
 class VideoReplaySystem:
     def __init__(self, camera_index=0, buffer_seconds=5, output_filename=None, 
                  trigger_key=ord('s'), quit_key=ord('q'), codec='XVID', 
-                 resolution=None, display_preview=True):
+                 resolution=None, display_preview=True, save_dir="SavedReplays"):
         """
         Initialize the video replay system.
         
@@ -21,6 +22,9 @@ class VideoReplaySystem:
             trigger_key: Key to press to save the replay
             quit_key: Key to press to quit the application
             codec: FourCC codec for the output video
+            resolution: Optional tuple (width, height) to set camera resolution
+            display_preview: Whether to show a preview window
+            save_dir: Directory to save replay files (default: "SavedReplays")
         """
         self.camera_index = camera_index
         self.buffer_seconds = buffer_seconds
@@ -28,6 +32,13 @@ class VideoReplaySystem:
         self.trigger_key = trigger_key
         self.quit_key = quit_key
         self.codec = codec
+        self.resolution = resolution
+        self.display_preview = display_preview
+        self.save_dir = save_dir
+        
+        # Create save directory if it doesn't exist
+        save_path = Path(self.save_dir)
+        save_path.mkdir(exist_ok=True, parents=True)
         
         # Initialize capture
         self.cap = None
@@ -43,6 +54,12 @@ class VideoReplaySystem:
         
         if not self.cap.isOpened():
             raise RuntimeError(f"Failed to open camera at index {self.camera_index}")
+        
+        # Set resolution if provided
+        if self.resolution:
+            width, height = self.resolution
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
             
         # Get video properties
         self.fps = int(self.cap.get(cv2.CAP_PROP_FPS)) or 30  # fallback to 30 if undetectable
@@ -71,8 +88,9 @@ class VideoReplaySystem:
 
                 self.buffer.append(frame)
 
-                # Display preview
-                cv2.imshow('Live Feed', frame)
+                # Display preview if enabled
+                if self.display_preview:
+                    cv2.imshow('Live Feed', frame)
 
                 key = cv2.waitKey(1) & 0xFF
 
@@ -91,10 +109,14 @@ class VideoReplaySystem:
             return
             
         # Generate filename with timestamp if not provided
-        filename = self.output_filename
-        if filename is None:
+        if self.output_filename:
+            filename = self.output_filename
+            # If just a filename without path, add save_dir
+            if not os.path.dirname(filename):
+                filename = os.path.join(self.save_dir, filename)
+        else:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"replay_{timestamp}.mp4"
+            filename = os.path.join(self.save_dir, f"replay_{timestamp}.mp4")
             
         print(f"Saving replay to {filename}...")
         
@@ -122,6 +144,9 @@ if __name__ == "__main__":
         buffer_seconds=5,         # Keep 5 seconds of video
         output_filename=None,     # Use auto-generated filename based on timestamp
         trigger_key=ord('s'),     # Press 's' to save
-        quit_key=ord('q')         # Press 'q' to quit
+        quit_key=ord('q'),        # Press 'q' to quit
+        save_dir="SavedReplays",  # Directory to save replay files
+        resolution=None,          # Use default camera resolution
+        display_preview=True      # Show preview window
     )
     replay_system.run()

@@ -49,9 +49,16 @@ replay_system = VideoReplaySystem(
     buffer_seconds=10,        # Keep 10 seconds of video instead of the default 5
     output_filename=None,     # Auto-generate filename with timestamp
     trigger_key=ord('r'),     # Press 'r' to save replay instead of 's'
-    quit_key=ord('x')         # Press 'x' to quit instead of 'q'
+    quit_key=ord('x'),        # Press 'x' to quit instead of 'q'
+    save_dir="SavedReplays",  # Directory to save replay files
+    resolution=(1280, 720),   # Set specific camera resolution (width, height)
+    display_preview=True      # Show preview window
 )
 ```
+
+### Saved Files
+
+By default, all replay videos are saved to the `SavedReplays` directory with timestamped filenames (format: `replay_YYYYMMDD_HHMMSS.mp4`). This helps keep your replays organized and prevents overwriting previous files.
 
 ### USB Camera Support
 
