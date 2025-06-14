@@ -4,6 +4,7 @@ import os
 import numpy as np
 import cv2
 import collections
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -28,6 +29,7 @@ class VideoReplaySystem:
         """
         self.camera_index = camera_index
         self.buffer_seconds = buffer_seconds
+        self.trigger_delay = 1
         self.output_filename = output_filename
         self.trigger_key = trigger_key
         self.quit_key = quit_key
@@ -67,7 +69,7 @@ class VideoReplaySystem:
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         
         # Initialize buffer
-        buffer_size = self.fps * self.buffer_seconds
+        buffer_size = self.fps * (self.buffer_seconds + self.trigger_delay)
         self.buffer = collections.deque(maxlen=buffer_size)
         
         print(f"Capture started: {self.width}x{self.height} at {self.fps} FPS")
@@ -91,10 +93,20 @@ class VideoReplaySystem:
                 # Display preview if enabled
                 if self.display_preview:
                     cv2.imshow('Live Feed', frame)
-
+                    
                 key = cv2.waitKey(1) & 0xFF
 
                 if key == self.trigger_key:
+                    start_time = time.time()
+                    # Continue recording for 1 more second
+                    while time.time() - start_time < 1.0:
+                        ret, frame = self.cap.read()
+                        if not ret:
+                            break
+                        self.buffer.append(frame)
+                        # if self.display_preview:
+                        #     cv2.imshow('Live Feed', frame)
+                        # cv2.waitKey(1)
                     self.save_replay()
                 elif key == self.quit_key:
                     break
