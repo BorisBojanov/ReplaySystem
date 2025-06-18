@@ -9,8 +9,8 @@ from pathlib import Path
 
 
 class VideoReplaySystem:
-    def __init__(self, camera_index=0, buffer_seconds=5, output_filename=None, 
-                 trigger_key=ord('s'), quit_key=ord('q'), codec='mp4v', 
+    def __init__(self, camera_index=0, buffer_seconds=5, playback_speed=1,
+                 trigger_key=ord('s'), quit_key=ord('q'), open_replay_key=ord("v"), codec='mp4v', 
                  resolution=None, display_preview=True, save_dir="SavedReplays"):
         """
         Initialize the video replay system.
@@ -25,18 +25,25 @@ class VideoReplaySystem:
             resolution: Optional tuple (width, height) to set camera resolution
             display_preview: Whether to show a preview window
             save_dir: Directory to save replay files (default: "SavedReplays")
+            playback_speed: Speed of playback for replays the bigger, the slower
         """
         self.camera_index = camera_index
         self.buffer_seconds = buffer_seconds
-        self.output_filename = output_filename
         self.trigger_key = trigger_key
         self.quit_key = quit_key
+        self.open_replay_key = open_replay_key
         self.codec = codec
+        self.playback_speed = playback_speed
         self.resolution = resolution
         self.display_preview = display_preview
-        self.save_dir = save_dir
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S") # unique timestamp for each session
+
+        self.save_dir = save_dir + "_" + timestamp
+        self.replay_count = 0
         
         # Create save directory if it doesn't exist
+
         save_path = Path(self.save_dir)
         save_path.mkdir(exist_ok=True, parents=True)
         
@@ -96,6 +103,8 @@ class VideoReplaySystem:
 
                 if key == self.trigger_key:
                     self.save_replay()
+                elif key == self.open_replay_key:
+                    self.open_last_replay()
                 elif key == self.quit_key:
                     break
                     
@@ -107,16 +116,8 @@ class VideoReplaySystem:
         if not self.buffer:
             print("Buffer is empty. Nothing to save.")
             return
-            
-        # Generate filename with timestamp if not provided
-        if self.output_filename:
-            filename = self.output_filename
-            # If just a filename without path, add save_dir
-            if not os.path.dirname(filename):
-                filename = os.path.join(self.save_dir, filename)
-        else:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = os.path.join(self.save_dir, f"replay_{timestamp}.mp4")
+        
+        filename = os.path.join(self.save_dir, str(self.replay_count) + ".mp4")
             
         print(f"Saving replay to {filename}...")
         
@@ -126,13 +127,34 @@ class VideoReplaySystem:
         out.release()
         
         print(f"Saved last {self.buffer_seconds} seconds to {filename}")
-    
+        self.replay_count += 1    
+
     def cleanup(self):
         """Release resources."""
         if self.cap is not None:
             self.cap.release()
         cv2.destroyAllWindows()
         print("Cleanup complete")
+    
+    def open_last_replay(self):
+        if self.replay_count == 0:
+            print("No replays saved yet.")
+            return
+        
+        filename = os.path.join(self.save_dir, str(self.replay_count - 1) + ".mp4")
+        
+        cap = cv2.VideoCapture(filename)
+        
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+            cv2.imshow('Replay', frame)
+            if cv2.waitKey(self.playback_speed) & 0xFF == ord('q'):
+                break
+        
+        cap.release()
+        cv2.destroyAllWindows()
 
 
 
@@ -142,11 +164,11 @@ if __name__ == "__main__":
     replay_system = VideoReplaySystem(
         camera_index=0,           # First camera (usually webcam or USB camera)
         buffer_seconds=5,         # Keep 5 seconds of video
-        output_filename=None,     # Use auto-generated filename based on timestamp
         trigger_key=ord('s'),     # Press 's' to save
         quit_key=ord('q'),        # Press 'q' to quit
         save_dir="SavedReplays",  # Directory to save replay files
         resolution=None,          # Use default camera resolution
-        display_preview=True      # Show preview window
+        display_preview=True,      # Show preview window
+        playback_speed=50,
     )
     replay_system.run()
