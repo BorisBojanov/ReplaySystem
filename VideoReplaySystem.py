@@ -9,8 +9,8 @@ from pathlib import Path
 
 
 class VideoReplaySystem:
-    def __init__(self, camera_index=0, buffer_seconds=5, playback_speed=1,
-                 trigger_key=ord('s'), quit_key=ord('q'), open_replay_key=ord("v"), codec='mp4v', 
+    def __init__(self, camera_index=0, buffer_seconds=5, normal_playback_speed=1, slowmode_playback_speed=100,
+                 trigger_key=ord('s'), quit_key=ord('q'), open_replay_key=ord("v"), slowmode_key=ord("z"), codec='mp4v', 
                  resolution=None, display_preview=True, save_dir="SavedReplays"):
         """
         Initialize the video replay system.
@@ -32,10 +32,13 @@ class VideoReplaySystem:
         self.trigger_key = trigger_key
         self.quit_key = quit_key
         self.open_replay_key = open_replay_key
+        self.slowmode_key = slowmode_key
         self.codec = codec
-        self.playback_speed = playback_speed
+        self.normal_playback_speed = normal_playback_speed
+        self.slowmode_playback_speed = slowmode_playback_speed
         self.resolution = resolution
         self.display_preview = display_preview
+        self.slowmode = False
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S") # unique timestamp for each session
 
@@ -93,10 +96,12 @@ class VideoReplaySystem:
                     print("Frame capture failed. Exiting.")
                     break
 
-                self.buffer.append(frame)
+                self.buffer.append(frame.copy())
 
                 # Display preview if enabled
                 if self.display_preview:
+                    if self.slowmode:
+                        cv2.putText(frame, "Slowmode Enabled", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                     cv2.imshow('Live Feed', frame)
 
                 key = cv2.waitKey(1) & 0xFF
@@ -104,9 +109,17 @@ class VideoReplaySystem:
                 if key == self.trigger_key:
                     self.save_replay()
                 elif key == self.open_replay_key:
-                    self.open_last_replay()
+                    self.view_replay(self.replay_count - 1)
+                elif key == self.slowmode_key:
+                    self.slowmode = not self.slowmode
                 elif key == self.quit_key:
                     break
+                else:
+                    try:
+                        if int(chr(key)):
+                            self.view_replay(self.replay_count - int(chr(key)))
+                    except:
+                        continue
                     
         finally:
             self.cleanup()
@@ -136,22 +149,32 @@ class VideoReplaySystem:
         cv2.destroyAllWindows()
         print("Cleanup complete")
     
-    def open_last_replay(self):
-        if self.replay_count == 0:
+    def view_replay(self, replay_index):
+        if self.replay_count <= 0:
             print("No replays saved yet.")
             return
         
-        filename = os.path.join(self.save_dir, str(self.replay_count - 1) + ".mp4")
+        filename = os.path.join(self.save_dir, str(replay_index) + ".mp4")
         
         cap = cv2.VideoCapture(filename)
         
         while cap.isOpened():
+            key = cv2.waitKey(1) & 0xFF
+
+
             ret, frame = cap.read()
             if not ret:
                 break
+            if self.slowmode:
+                cv2.putText(frame, "Slowmode Enabled", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            cv2.putText(frame, f"Replay Number: {replay_index}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             cv2.imshow('Replay', frame)
-            if cv2.waitKey(self.playback_speed) & 0xFF == ord('q'):
-                break
+            if self.slowmode:
+                if cv2.waitKey(self.slowmode_playback_speed) & 0xFF == ord('q'):
+                    break
+            else:
+                if cv2.waitKey(self.normal_playback_speed) & 0xFF == ord('q'):
+                    break
         
         cap.release()
         cv2.destroyAllWindows()
@@ -162,13 +185,15 @@ class VideoReplaySystem:
 if __name__ == "__main__":
     # Create and run the video replay system
     replay_system = VideoReplaySystem(
-        camera_index=0,           # First camera (usually webcam or USB camera)
+        camera_index=1,           # First camera (usually webcam or USB camera)
         buffer_seconds=5,         # Keep 5 seconds of video
         trigger_key=ord('s'),     # Press 's' to save
-        quit_key=ord('q'),        # Press 'q' to quit
+        quit_key=ord('q'),       # Press 'q' to quit
+        slowmode_key=ord('z'),  # Press 'z' to toggle slow mode
         save_dir="SavedReplays",  # Directory to save replay files
         resolution=None,          # Use default camera resolution
-        display_preview=True,      # Show preview window
-        playback_speed=50,
+        display_preview=True,    # Show preview window
+        normal_playback_speed=10,
+        slowmode_playback_speed=70
     )
     replay_system.run()
