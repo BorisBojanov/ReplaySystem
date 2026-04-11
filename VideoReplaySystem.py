@@ -5,10 +5,28 @@ import numpy as np
 import cv2
 import collections
 import time
+import threading
 from datetime import datetime
 from pathlib import Path
 
+'''
+TODO: Implament a checker for the OS running the code to use the best available hardware encoding
+        Platform 	    Hardware Encoder Framework	        Hardware Requirements
+        Mac/Apple	        VideoToolbox	                    Apple Silicon (M1/M2/M3) or Intel Macs
+        Windows	            NVENC	                            NVIDIA Graphics Cards
+        Windows	            QuickSync (QSV)	                    Intel CPUs with Integrated Graphics
+        Windows	            VCE / AMF	                        AMD CPUs with Graphics Cards
 
+        
+'''
+
+
+"""sumary_line
+
+Keyword arguments:
+argument -- description
+Return: return_description
+"""
 class VideoReplaySystem:
     def __init__(self, camera_index=0, buffer_seconds=5, output_filename=None, 
                  trigger_key=ord('s'), quit_key=ord('q'), codec='mp4v', 
@@ -64,9 +82,22 @@ class VideoReplaySystem:
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
             
         # Get video properties
-        self.fps = int(self.cap.get(cv2.CAP_PROP_FPS)) or 30  # fallback to 30 if undetectable
+        self.fps = int(self.cap.get(cv2.CAP_PROP_FPS)) #or 30  # fallback to 30 if undetectable
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        
+        # Measure actual FPS if the reported FPS is 0 or unrealistic
+        if self.fps <= 0 or self.fps > 1000:
+            try:
+                self.fps = int(self.measure_fps())
+                print(f"Corrected FPS: {self.fps}, after measuring")
+
+                if self.fps <= 0:
+                    print("Measured FPS is still invalid. Defaulting to 30 FPS.")
+                    self.fps = 30                
+            except Exception as e:
+                print(f"Error measuring FPS: {e}")
+                self.fps = 30  # fallback to 30 if measurement fails
         
         # Initialize buffer
         buffer_size = self.fps * (self.buffer_seconds + self.trigger_delay)
@@ -75,7 +106,63 @@ class VideoReplaySystem:
         print(f"Capture started: {self.width}x{self.height} at {self.fps} FPS")
         print(f"Buffer size: {buffer_size} frames ({self.buffer_seconds} seconds)")
         print(f"Press '{chr(self.trigger_key)}' to save replay, '{chr(self.quit_key)}' to quit")
+    
+    """Check the true FPS from Camera if it returns a silly number with cv2.CAP_PROP_FPS
+    
+    Keyword arguments:
+    num_frames -- number of frames to capture for measurement (default: 120)
+    Return: measured_fps -- the calculated fps based on time taken to capture
+    """
+    def measure_fps(self, num_frames=120):
+        """
+        Measure the actual FPS 
+        count 120 frames
+        measure time it takes to recieve all frames
+        """
+        def frame_gen():
+            """Generator to yield frames from the camera."""
+            if self.cap is not None:
+                for i in range(num_frames):
+                    ret, frame = self.cap.read()
+                    if not ret:
+                        print("Frame capture failed during FPS measurement.")
+                        break
+                    yield frame
+            else:
+                print("Camera is not initialized so cannot measure FPS.")
+
+        warmup_frames = 10 # Number of initial frames to skip for warm-up
+
+        camera = self.cap
+        if camera is None or not camera.isOpened():
+            print("Camera is not initialized for FPS measurement.")
+            return 0
+        else: 
+            print(f"Starting Fps measurement with: {num_frames} frames ")
+            # start = time.time() # Start time at frame 0
+            start = int(0) # declare start variabele
+            
+            for frame_number, frame in enumerate(frame_gen(), start=0):
+                # ret, frame = camera.read() # Read a frame from the camera, then start the timer
+                if frame_number == warmup_frames:
+                    start = time.time() # Start time after 10 frames for more accurate measurement (skip initial frames which may be slower)
+
+            
+            end = time.time()
+            # Calculate seconds elapsed and actual FPS
+            seconds = end - start
+
+            if seconds > 0:
+                measured_fps = (num_frames - warmup_frames) / seconds 
+                print(f"Measured FPS: {measured_fps:.2f}")
+                return measured_fps
+            else:
+                print("Time measurement error during FPS calculation. seconds not > 0")
+                return 0
         
+
+
+
     def run(self):
         """Run the main capture and processing loop."""
         if self.cap is None or not self.cap.isOpened():
@@ -87,6 +174,7 @@ class VideoReplaySystem:
                 if not ret:
                     print("Frame capture failed. Exiting.")
                     break
+                
 
                 self.buffer.append(frame)
 
@@ -107,19 +195,24 @@ class VideoReplaySystem:
                         # if self.display_preview:
                         #     cv2.imshow('Live Feed', frame)
                         # cv2.waitKey(1)
-                    self.save_replay()
+                    # when the trigger fires snapshot the current buffer and save it in a separate thread:
+                    if self.buffer is not None:
+                        frames = list(self.buffer)  # Snapshot of current buffer
+                        threading.Thread(target=self.save_replay, args=(frames,)).start()   
+
                 elif key == self.quit_key:
                     break
                     
         finally:
             self.cleanup()
     
-    def save_replay(self):
+    # Save frames as a parameter instead of reading self.buffer directly
+    def save_replay(self, frames):
         """Save the current buffer to a video file."""
-        if not self.buffer:
+        if not frames:
             print("Buffer is empty. Nothing to save.")
             return
-            
+        
         # Generate filename with timestamp if not provided
         if self.output_filename:
             filename = self.output_filename
@@ -133,7 +226,7 @@ class VideoReplaySystem:
         print(f"Saving replay to {filename}...")
         
         out = cv2.VideoWriter(filename, self.fourcc, self.fps, (self.width, self.height))
-        for frame in self.buffer:
+        for frame in frames:
             out.write(frame)
         out.release()
         
