@@ -6,6 +6,7 @@ import cv2
 import collections
 import time
 import threading
+import ffmpeg
 from datetime import datetime
 from pathlib import Path
 
@@ -21,11 +22,26 @@ TODO: Implament a checker for the OS running the code to use the best available 
 '''
 
 
-"""sumary_line
+"""VideoReplaySystem class
 
 Keyword arguments:
-argument -- description
-Return: return_description
+camera_index -- Camera device index (0 is usually the first webcam/USB camera)
+buffer_seconds -- Number of seconds to keep in the buffer
+output_filename -- Filename for saved videos (if None, uses timestamp)
+trigger_key -- Key to press to save the replay
+quit_key -- Key to press to quit the application
+codec -- FourCC codec for the output video
+resolution -- Optional tuple (width, height) to set camera resolution
+display_preview -- Whether to show a preview window
+save_dir -- Directory to save replay files (default: "SavedReplays")
+
+Methods:
+start_capture() -- Initialize and start the video capture.
+measure_fps(num_frames=120) -- Measure the actual FPS by counting frames and measuring time
+run() -- Run the main capture and processing loop.
+save_replay(frames) -- Save the current buffer to a video file.
+cleanup() -- Release resources.
+
 """
 class VideoReplaySystem:
     def __init__(self, camera_index=0, buffer_seconds=5, output_filename=None, 
@@ -159,52 +175,50 @@ class VideoReplaySystem:
             else:
                 print("Time measurement error during FPS calculation. seconds not > 0")
                 return 0
-        
-
-
+    
 
     def run(self):
         """Run the main capture and processing loop."""
         if self.cap is None or not self.cap.isOpened():
             self.start_capture()
-            
-        try:
-            while self.cap.isOpened():
-                ret, frame = self.cap.read()
-                if not ret:
-                    print("Frame capture failed. Exiting.")
-                    break
-                
-
-                self.buffer.append(frame)
-
-                # Display preview if enabled
-                if self.display_preview:
-                    cv2.imshow('Live Feed', frame)
+        else:
+            try:
+                while self.cap.isOpened():
+                    ret, frame = self.cap.read()
+                    if not ret:
+                        print("Frame capture failed. Exiting.")
+                        break
                     
-                key = cv2.waitKey(1) & 0xFF
 
-                if key == self.trigger_key:
-                    start_time = time.time()
-                    # Continue recording for 1 more second
-                    while time.time() - start_time < 1.0:
-                        ret, frame = self.cap.read()
-                        if not ret:
-                            break
-                        self.buffer.append(frame)
-                        # if self.display_preview:
-                        #     cv2.imshow('Live Feed', frame)
-                        # cv2.waitKey(1)
-                    # when the trigger fires snapshot the current buffer and save it in a separate thread:
-                    if self.buffer is not None:
-                        frames = list(self.buffer)  # Snapshot of current buffer
-                        threading.Thread(target=self.save_replay, args=(frames,)).start()   
+                    self.buffer.append(frame)
 
-                elif key == self.quit_key:
-                    break
-                    
-        finally:
-            self.cleanup()
+                    # Display preview if enabled
+                    if self.display_preview:
+                        cv2.imshow('Live Feed', frame)
+                        
+                    key = cv2.waitKey(1) & 0xFF
+
+                    if key == self.trigger_key:
+                        start_time = time.time()
+                        # Continue recording for 1 more second
+                        while time.time() - start_time < 1.0:
+                            ret, frame = self.cap.read()
+                            if not ret:
+                                break
+                            self.buffer.append(frame)
+                            # if self.display_preview:
+                            #     cv2.imshow('Live Feed', frame)
+                            # cv2.waitKey(1)
+                        # when the trigger fires snapshot the current buffer and save it in a separate thread:
+                        if self.buffer is not None:
+                            frames = list(self.buffer)  # Snapshot of current buffer
+                            threading.Thread(target=self.save_replay, args=(frames,)).start()   
+
+                    elif key == self.quit_key:
+                        break
+                        
+            finally:
+                self.cleanup()
     
     # Save frames as a parameter instead of reading self.buffer directly
     def save_replay(self, frames):
@@ -224,11 +238,14 @@ class VideoReplaySystem:
             filename = os.path.join(self.save_dir, f"replay_{timestamp}.mp4")
             
         print(f"Saving replay to {filename}...")
-        
-        out = cv2.VideoWriter(filename, self.fourcc, self.fps, (self.width, self.height))
-        for frame in frames:
-            out.write(frame)
-        out.release()
+        # Save frames to video file
+        try:
+            out = cv2.VideoWriter(filename, self.fourcc, self.fps, (self.width, self.height))
+            for frame in frames:
+                out.write(frame)
+            out.release()
+        except Exception as e:
+            print(f"Error saving replay: {e}")
         
         print(f"Saved last {self.buffer_seconds} seconds to {filename}")
     
