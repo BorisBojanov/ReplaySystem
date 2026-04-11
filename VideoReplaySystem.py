@@ -244,10 +244,10 @@ class VideoReplaySystem:
             for frame in frames:
                 out.write(frame)
             out.release()
+            print(f"Saved last {self.buffer_seconds} seconds to {filename}")
         except Exception as e:
             print(f"Error saving replay: {e}")
         
-        print(f"Saved last {self.buffer_seconds} seconds to {filename}")
     
     def cleanup(self):
         """Release resources."""
