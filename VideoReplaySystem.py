@@ -82,7 +82,7 @@ class VideoReplaySystem:
         self.fps = 0
         self.width = 0
         self.height = 0
-        self.fourcc = cv2.VideoWriter_fourcc(*self.codec)
+        self.fourcc = cv2.VideoWriter.fourcc(*self.codec) # updated static method syntax
         
     def start_capture(self):
         """Initialize and start the video capture."""
@@ -189,8 +189,8 @@ class VideoReplaySystem:
                         print("Frame capture failed. Exiting.")
                         break
                     
-
-                    self.buffer.append(frame)
+                    if self.buffer is not None: 
+                        self.buffer.append(frame) # Add the new frame to the buffer  
 
                     # Display preview if enabled
                     if self.display_preview:
@@ -205,7 +205,8 @@ class VideoReplaySystem:
                             ret, frame = self.cap.read()
                             if not ret:
                                 break
-                            self.buffer.append(frame)
+                            if self.buffer is not None: 
+                                self.buffer.append(frame) # Add the new frame to the buffer during the trigger delay
                             # if self.display_preview:
                             #     cv2.imshow('Live Feed', frame)
                             # cv2.waitKey(1)
