@@ -18,7 +18,6 @@ TODO: Implament a checker for the OS running the code to use the best available 
         Windows	            QuickSync (QSV)	                    Intel CPUs with Integrated Graphics
         Windows	            VCE / AMF	                        AMD CPUs with Graphics Cards
 
-        
 '''
 
 
